@@ -28,6 +28,22 @@ function escapeHtml(value) {
 
 function isAdmin() { return !!state.adminPin; }
 
+function readScorePair(rawOne, rawTwo, oneId, twoId, winnerId) {
+  const oneEmpty = rawOne.trim() === "";
+  const twoEmpty = rawTwo.trim() === "";
+  if (oneEmpty && twoEmpty) return { one: null, two: null };
+  if (oneEmpty || twoEmpty) return { error: "Enter both scores, or leave both blank." };
+  const one = Number(rawOne);
+  const two = Number(rawTwo);
+  if (!Number.isInteger(one) || !Number.isInteger(two) || one < 0 || two < 0) {
+    return { error: "Scores must be whole numbers, 0 or higher." };
+  }
+  if (one === two) return { error: "Scores can't be tied." };
+  const winnerHasHigherScore = (winnerId === oneId && one > two) || (winnerId === twoId && two > one);
+  if (!winnerHasHigherScore) return { error: "The winner's score should be higher." };
+  return { one, two };
+}
+
 function isSetupMissing(error) {
   return error?.code === "PGRST202" || /Could not find the function/i.test(error?.message || "");
 }
@@ -58,7 +74,7 @@ async function loadData({ quiet = false } = {}) {
   if (!quiet) setStatus("", "Syncing…");
   const [playersResult, gamesResult] = await Promise.all([
     db.from("players").select("id,name,created_at").order("name"),
-    db.from("games").select("id,player_one_id,player_two_id,winner_id,played_at").order("played_at", { ascending: false })
+    db.from("games").select("id,player_one_id,player_two_id,winner_id,player_one_score,player_two_score,played_at").order("played_at", { ascending: false })
   ]);
 
   const error = playersResult.error || gamesResult.error;
@@ -155,8 +171,11 @@ function renderHistory() {
     const two = players.get(game.player_two_id) || "Unknown";
     const winner = players.get(game.winner_id) || "Unknown";
     const delta = state.eloDeltas?.get(game.id);
+    const hasScore = game.player_one_score != null && game.player_two_score != null;
+    const winnerScore = game.winner_id === game.player_one_id ? game.player_one_score : game.player_two_score;
+    const loserScore = game.winner_id === game.player_one_id ? game.player_two_score : game.player_one_score;
     return `<article class="history-item" data-id="${game.id}">
-      <div><span class="win-tag">WINNER</span><div class="matchup"><span class="winner-name">${escapeHtml(winner)}</span> defeated ${escapeHtml(winner === one ? two : one)}${delta != null ? ` <span class="elo-delta">+${delta} Elo</span>` : ""}</div></div>
+      <div><span class="win-tag">WINNER</span><div class="matchup"><span class="winner-name">${escapeHtml(winner)}</span> defeated ${escapeHtml(winner === one ? two : one)}${hasScore ? ` <span class="score-tag">${winnerScore}–${loserScore}</span>` : ""}${delta != null ? ` <span class="elo-delta">+${delta} Elo</span>` : ""}</div></div>
       <div class="history-right">
         <time class="game-time" datetime="${game.played_at}">${new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(game.played_at))}</time>
         <span class="history-admin-actions">
@@ -200,6 +219,19 @@ el("playerForm").addEventListener("submit", async (event) => {
   await loadData({ quiet: true });
 });
 
+function autoSelectWinnerFromScore() {
+  const one = el("playerOne").value;
+  const two = el("playerTwo").value;
+  if (!one || !two || one === two) return;
+  const rawOne = el("scoreOne").value;
+  const rawTwo = el("scoreTwo").value;
+  if (rawOne === "" || rawTwo === "") return;
+  const s1 = Number(rawOne);
+  const s2 = Number(rawTwo);
+  if (!Number.isInteger(s1) || !Number.isInteger(s2) || s1 === s2) return;
+  el("winner").value = s1 > s2 ? one : two;
+}
+
 el("gameForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const playerOne = el("playerOne").value;
@@ -208,9 +240,14 @@ el("gameForm").addEventListener("submit", async (event) => {
   if (!playerOne || !playerTwo || playerOne === playerTwo || ![playerOne, playerTwo].includes(winner)) {
     return toast("Choose two different players and the winner.", true);
   }
+  const score = readScorePair(el("scoreOne").value, el("scoreTwo").value, playerOne, playerTwo, winner);
+  if (score.error) return toast(score.error, true);
   const button = el("recordGameButton");
   button.disabled = true;
-  const { error } = await db.from("games").insert({ player_one_id: playerOne, player_two_id: playerTwo, winner_id: winner });
+  const { error } = await db.from("games").insert({
+    player_one_id: playerOne, player_two_id: playerTwo, winner_id: winner,
+    player_one_score: score.one, player_two_score: score.two
+  });
   button.disabled = false;
   if (error) return toast(error.message, true);
   const winnerName = state.players.find((p) => p.id === winner)?.name || "Winner";
@@ -222,6 +259,8 @@ el("gameForm").addEventListener("submit", async (event) => {
 
 el("playerOne").addEventListener("change", updateWinnerOptions);
 el("playerTwo").addEventListener("change", updateWinnerOptions);
+el("scoreOne").addEventListener("input", autoSelectWinnerFromScore);
+el("scoreTwo").addEventListener("input", autoSelectWinnerFromScore);
 el("refreshButton").addEventListener("click", () => loadData());
 
 // --- Admin mode -------------------------------------------------------
@@ -371,6 +410,21 @@ function refreshEditWinnerOptions(id) {
     <option value="${two.id}" ${currentWinner === two.id ? "selected" : ""}>${escapeHtml(two.name)} wins</option>`;
 }
 
+function autoSelectEditWinner(id) {
+  const article = document.querySelector(`.history-item[data-id="${id}"]`);
+  const oneId = article.querySelector(".edit-one").value;
+  const twoId = article.querySelector(".edit-two").value;
+  const winnerSelect = article.querySelector(".edit-winner");
+  if (!oneId || !twoId || oneId === twoId || winnerSelect.disabled) return;
+  const rawOne = article.querySelector(".edit-score-one").value;
+  const rawTwo = article.querySelector(".edit-score-two").value;
+  if (rawOne === "" || rawTwo === "") return;
+  const s1 = Number(rawOne);
+  const s2 = Number(rawTwo);
+  if (!Number.isInteger(s1) || !Number.isInteger(s2) || s1 === s2) return;
+  winnerSelect.value = s1 > s2 ? oneId : twoId;
+}
+
 function startEditGame(id) {
   const game = state.games.find((g) => g.id === id);
   if (!game) return;
@@ -381,6 +435,11 @@ function startEditGame(id) {
       <select class="edit-one">${playerOptionsHtml(game.player_one_id)}</select>
       <span class="versus">VS</span>
       <select class="edit-two">${playerOptionsHtml(game.player_two_id)}</select>
+      <div class="score-row">
+        <input type="number" class="edit-score-one" min="0" step="1" inputmode="numeric" placeholder="0" value="${game.player_one_score ?? ""}">
+        <span class="score-dash">–</span>
+        <input type="number" class="edit-score-two" min="0" step="1" inputmode="numeric" placeholder="0" value="${game.player_two_score ?? ""}">
+      </div>
       <select class="edit-winner">
         <option value="${game.player_one_id}" ${game.winner_id === game.player_one_id ? "selected" : ""}>${escapeHtml(state.players.find((p) => p.id === game.player_one_id)?.name || "")} wins</option>
         <option value="${game.player_two_id}" ${game.winner_id === game.player_two_id ? "selected" : ""}>${escapeHtml(state.players.find((p) => p.id === game.player_two_id)?.name || "")} wins</option>
@@ -400,8 +459,15 @@ async function submitEditGame(id) {
   if (!oneId || !twoId || oneId === twoId || ![oneId, twoId].includes(winnerId)) {
     return toast("Choose two different players and a winner.", true);
   }
+  const score = readScorePair(
+    article.querySelector(".edit-score-one").value,
+    article.querySelector(".edit-score-two").value,
+    oneId, twoId, winnerId
+  );
+  if (score.error) return toast(score.error, true);
   const ok = await callAdmin("admin_update_game", {
-    p_game_id: id, p_player_one_id: oneId, p_player_two_id: twoId, p_winner_id: winnerId
+    p_game_id: id, p_player_one_id: oneId, p_player_two_id: twoId, p_winner_id: winnerId,
+    p_player_one_score: score.one, p_player_two_score: score.two
   });
   if (ok) { toast("Match updated."); await loadData({ quiet: true }); }
 }
@@ -425,6 +491,13 @@ el("gameHistory").addEventListener("change", (event) => {
   if (event.target.matches(".edit-one, .edit-two")) {
     const id = event.target.closest("[data-id]")?.dataset.id;
     if (id) refreshEditWinnerOptions(id);
+  }
+});
+
+el("gameHistory").addEventListener("input", (event) => {
+  if (event.target.matches(".edit-score-one, .edit-score-two")) {
+    const id = event.target.closest("[data-id]")?.dataset.id;
+    if (id) autoSelectEditWinner(id);
   }
 });
 

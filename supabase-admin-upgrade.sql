@@ -40,6 +40,27 @@ alter table public.games
   add constraint games_player_two_id_fkey foreign key (player_two_id) references public.players(id) on delete cascade,
   add constraint games_winner_id_fkey foreign key (winner_id) references public.players(id) on delete cascade;
 
+-- Optional final score for each side. Nullable so existing matches (and any
+-- match recorded without a score) stay valid.
+alter table public.games add column if not exists player_one_score integer;
+alter table public.games add column if not exists player_two_score integer;
+
+alter table public.games drop constraint if exists games_scores_non_negative;
+alter table public.games drop constraint if exists games_scores_consistent;
+alter table public.games
+  add constraint games_scores_non_negative check (
+    (player_one_score is null or player_one_score >= 0) and
+    (player_two_score is null or player_two_score >= 0)
+  ),
+  add constraint games_scores_consistent check (
+    player_one_score is null or player_two_score is null or (
+      player_one_score <> player_two_score and (
+        (winner_id = player_one_id and player_one_score > player_two_score) or
+        (winner_id = player_two_id and player_two_score > player_one_score)
+      )
+    )
+  );
+
 -- Raises an error unless p_pin matches the stored admin PIN.
 create or replace function public.admin_check_pin(p_pin text)
 returns void
@@ -59,7 +80,8 @@ $$;
 
 create or replace function public.admin_update_game(
   p_game_id uuid, p_pin text,
-  p_player_one_id uuid, p_player_two_id uuid, p_winner_id uuid
+  p_player_one_id uuid, p_player_two_id uuid, p_winner_id uuid,
+  p_player_one_score integer default null, p_player_two_score integer default null
 )
 returns void
 language plpgsql
@@ -71,7 +93,9 @@ begin
   update public.games
   set player_one_id = p_player_one_id,
       player_two_id = p_player_two_id,
-      winner_id = p_winner_id
+      winner_id = p_winner_id,
+      player_one_score = p_player_one_score,
+      player_two_score = p_player_two_score
   where id = p_game_id;
 end;
 $$;
@@ -113,7 +137,7 @@ end;
 $$;
 
 grant execute on function public.admin_check_pin(text) to anon, authenticated;
-grant execute on function public.admin_update_game(uuid, text, uuid, uuid, uuid) to anon, authenticated;
+grant execute on function public.admin_update_game(uuid, text, uuid, uuid, uuid, integer, integer) to anon, authenticated;
 grant execute on function public.admin_delete_game(uuid, text) to anon, authenticated;
 grant execute on function public.admin_update_player(uuid, text, text) to anon, authenticated;
 grant execute on function public.admin_delete_player(uuid, text) to anon, authenticated;

@@ -15,6 +15,8 @@ The script creates `players` and `games`, enables live updates, and applies Row 
 1. Open `supabase-admin-upgrade.sql`, change the PIN in the `insert into admin_settings` line from `2468` to whatever code your admins should use.
 2. Paste the whole file into Supabase **SQL Editor** and click **Run** (once, after step 1 above).
 
+This also adds two optional columns (`player_one_score`, `player_two_score`) to `games`, so a final score can be recorded and edited alongside the winner. **Run this script even if you don't care about admin editing** — the site's data query now asks for those columns, so standings won't load until they exist.
+
 This adds a PIN-gated set of database functions that let the site edit or delete matches and players. Visitors still cannot touch the tables directly — every edit/delete goes through a function that checks the PIN inside Postgres first. To change the PIN later, run in SQL Editor:
 
 ```sql
@@ -46,6 +48,7 @@ For Netlify, you can drag this entire folder into the deployment area at https:/
 - Win/loss/win% and the old 3-points-per-win total still show as reference columns
 - Elo, standings, and match history recompute from the full match log on every load, so editing or deleting a past match automatically re-ranks everyone correctly
 - Standings and match history update live on every open device
+- Recording a match, the final score (e.g. 10–7) is optional — enter both and the winner auto-fills; leave both blank to just log the result without a score
 
 ## Correcting a mistake
 
