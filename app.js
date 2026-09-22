@@ -48,6 +48,13 @@ function isSetupMissing(error) {
   return error?.code === "PGRST202" || /Could not find the function/i.test(error?.message || "");
 }
 
+function isMissingColumn(error) {
+  return error?.code === "42703" || error?.code === "PGRST204" || /Could not find the .* column/i.test(error?.message || "");
+}
+
+const GAMES_COLUMNS_FULL = "id,player_one_id,player_two_id,winner_id,player_one_score,player_two_score,played_at";
+const GAMES_COLUMNS_BASIC = "id,player_one_id,player_two_id,winner_id,played_at";
+
 const ELO_START = 1000;
 const ELO_K = 32;
 
@@ -72,10 +79,17 @@ function computeElo() {
 
 async function loadData({ quiet = false } = {}) {
   if (!quiet) setStatus("", "Syncing…");
-  const [playersResult, gamesResult] = await Promise.all([
+  const [playersResult, firstGamesResult] = await Promise.all([
     db.from("players").select("id,name,created_at").order("name"),
-    db.from("games").select("id,player_one_id,player_two_id,winner_id,player_one_score,player_two_score,played_at").order("played_at", { ascending: false })
+    db.from("games").select(GAMES_COLUMNS_FULL).order("played_at", { ascending: false })
   ]);
+
+  let gamesResult = firstGamesResult;
+  state.scoresSupported = true;
+  if (gamesResult.error && isMissingColumn(gamesResult.error)) {
+    state.scoresSupported = false;
+    gamesResult = await db.from("games").select(GAMES_COLUMNS_BASIC).order("played_at", { ascending: false });
+  }
 
   const error = playersResult.error || gamesResult.error;
   if (error) {
@@ -188,6 +202,7 @@ function renderHistory() {
 }
 
 function render() {
+  el("scoreField").hidden = !state.scoresSupported;
   const elo = computeElo();
   state.eloRatings = elo.ratings;
   state.eloDeltas = elo.deltas;
@@ -240,14 +255,16 @@ el("gameForm").addEventListener("submit", async (event) => {
   if (!playerOne || !playerTwo || playerOne === playerTwo || ![playerOne, playerTwo].includes(winner)) {
     return toast("Choose two different players and the winner.", true);
   }
-  const score = readScorePair(el("scoreOne").value, el("scoreTwo").value, playerOne, playerTwo, winner);
-  if (score.error) return toast(score.error, true);
+  const payload = { player_one_id: playerOne, player_two_id: playerTwo, winner_id: winner };
+  if (state.scoresSupported) {
+    const score = readScorePair(el("scoreOne").value, el("scoreTwo").value, playerOne, playerTwo, winner);
+    if (score.error) return toast(score.error, true);
+    payload.player_one_score = score.one;
+    payload.player_two_score = score.two;
+  }
   const button = el("recordGameButton");
   button.disabled = true;
-  const { error } = await db.from("games").insert({
-    player_one_id: playerOne, player_two_id: playerTwo, winner_id: winner,
-    player_one_score: score.one, player_two_score: score.two
-  });
+  const { error } = await db.from("games").insert(payload);
   button.disabled = false;
   if (error) return toast(error.message, true);
   const winnerName = state.players.find((p) => p.id === winner)?.name || "Winner";

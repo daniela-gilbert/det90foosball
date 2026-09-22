@@ -63,11 +63,13 @@
               <div class="versus">VS</div>
               <label for="playerTwo">Player 2</label>
               <select id="playerTwo" required><option value="">Select player</option></select>
-              <label for="scoreOne">Final score <span class="optional-tag">(optional)</span></label>
-              <div class="score-row">
-                <input type="number" id="scoreOne" class="score-input" min="0" step="1" inputmode="numeric" placeholder="0">
-                <span class="score-dash">–</span>
-                <input type="number" id="scoreTwo" class="score-input" min="0" step="1" inputmode="numeric" placeholder="0">
+              <div id="scoreField" hidden>
+                <label for="scoreOne">Final score <span class="optional-tag">(optional)</span></label>
+                <div class="score-row">
+                  <input type="number" id="scoreOne" class="score-input" min="0" step="1" inputmode="numeric" placeholder="0">
+                  <span class="score-dash">–</span>
+                  <input type="number" id="scoreTwo" class="score-input" min="0" step="1" inputmode="numeric" placeholder="0">
+                </div>
               </div>
               <label for="winner">Winner</label>
               <select id="winner" required disabled><option value="">Choose both players first</option></select>
