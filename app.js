@@ -28,6 +28,10 @@ function escapeHtml(value) {
 
 function isAdmin() { return !!state.adminPin; }
 
+function isSetupMissing(error) {
+  return error?.code === "PGRST202" || /Could not find the function/i.test(error?.message || "");
+}
+
 const ELO_START = 1000;
 const ELO_K = 32;
 
@@ -263,7 +267,10 @@ el("pinForm").addEventListener("submit", async (event) => {
   button.disabled = true;
   const { error } = await db.rpc("admin_check_pin", { p_pin: pin });
   button.disabled = false;
-  if (error) return toast("Incorrect PIN.", true);
+  if (error) {
+    if (isSetupMissing(error)) return toast("Admin editing isn't set up yet — run supabase-admin-upgrade.sql in Supabase.", true);
+    return toast("Incorrect PIN.", true);
+  }
   state.adminPin = pin;
   sessionStorage.setItem(ADMIN_PIN_KEY, pin);
   closePinModal();
@@ -274,7 +281,9 @@ el("pinForm").addEventListener("submit", async (event) => {
 async function callAdmin(fn, params) {
   const { error } = await db.rpc(fn, { ...params, p_pin: state.adminPin });
   if (error) {
-    if (/pin/i.test(error.message)) {
+    if (isSetupMissing(error)) {
+      toast("Admin editing isn't set up yet — run supabase-admin-upgrade.sql in Supabase.", true);
+    } else if (/pin/i.test(error.message)) {
       state.adminPin = null;
       sessionStorage.removeItem(ADMIN_PIN_KEY);
       setAdminUI();
