@@ -36,10 +36,14 @@ h1 { font-size: clamp(3.5rem, 9vw, 6.4rem); line-height: .76; letter-spacing: -.
 h1 span { color: var(--gold-light); }
 h2 { font-size: 2rem; letter-spacing: .01em; }
 .subtitle { color: var(--muted); margin: 18px 0 0; max-width: 500px; }
+.hero-controls { display: flex; align-items: center; gap: 10px; }
 .status { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: .82rem; padding: 10px 14px; border: 1px solid var(--line); border-radius: 999px; background: rgba(0,0,0,.16); }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 12px var(--gold); }
 .status.online .status-dot { background: var(--green); box-shadow: 0 0 12px var(--green); }
 .status.error .status-dot { background: var(--red); box-shadow: 0 0 12px var(--red); }
+.admin-badge { color: var(--navy); background: var(--gold); font: 800 .68rem "Barlow Condensed", sans-serif; letter-spacing: .12em; padding: 6px 11px; border-radius: 999px; }
+.admin-toggle.unlocked { color: var(--navy); background: var(--gold); border-color: var(--gold); }
+.admin-toggle.unlocked:hover { transform: none; background: var(--gold-light); }
 .stats-strip { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--gold); color: var(--navy); border-radius: 14px; margin-bottom: 18px; overflow: hidden; box-shadow: var(--shadow); }
 .stats-strip div { padding: 17px 22px; display: flex; flex-direction: column; border-right: 1px solid rgba(16,28,43,.18); }
 .stats-strip div:last-child { border: 0; }
@@ -64,6 +68,15 @@ select:disabled { opacity: .55; }
 button:disabled { cursor: wait; opacity: .6; }
 .inline-form { display: flex; gap: 8px; }
 .inline-form button { flex: 0 0 48px; border: 0; border-radius: 9px; color: var(--navy); background: var(--gold); font-size: 1.6rem; cursor: pointer; }
+.text-button { border: 0; background: none; color: var(--muted); font-size: .95rem; cursor: pointer; padding: 4px 6px; border-radius: 6px; line-height: 1; }
+.text-button:hover { color: var(--gold-light); background: rgba(255,255,255,.06); }
+.roster-list { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 8px; max-height: 260px; overflow-y: auto; }
+.roster-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 2px; border-bottom: 1px solid var(--line); font-size: .88rem; }
+.roster-row:last-child { border-bottom: 0; }
+.roster-name { font-weight: 600; }
+.roster-actions { display: none; align-items: center; gap: 2px; flex: 0 0 auto; }
+.roster-edit-input { flex: 1; margin-right: 8px; padding: 8px 10px; }
+body.admin-mode .roster-actions, body.admin-mode .history-admin-actions { display: flex; }
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; }
 th { color: var(--muted); font-size: .66rem; letter-spacing: .11em; text-transform: uppercase; text-align: left; padding: 12px 20px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
@@ -84,15 +97,33 @@ tbody tr:hover { background: rgba(255,255,255,.025); }
 .history-list { display: grid; grid-template-columns: repeat(2, 1fr); border-top: 1px solid var(--line); }
 .history-item { padding: 17px 24px; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); }
 .history-item:nth-child(odd) { border-right: 1px solid var(--line); }
+.history-item.editing { grid-template-columns: 1fr; }
 .matchup { font-weight: 600; }
 .winner-name { color: var(--gold-light); }
-.game-time { color: var(--muted); font-size: .7rem; text-align: right; }
+.history-right { display: flex; align-items: center; gap: 10px; }
+.game-time { color: var(--muted); font-size: .7rem; text-align: right; white-space: nowrap; }
+.history-admin-actions { display: none; gap: 2px; }
 .win-tag { display: inline-block; color: var(--green); font-size: .63rem; letter-spacing: .08em; font-weight: 800; margin-bottom: 4px; }
+.elo-delta { color: var(--green); font-size: .72rem; font-weight: 700; margin-left: 4px; white-space: nowrap; }
+.edit-game-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.edit-game-form select { width: auto; flex: 1 1 140px; padding: 9px 10px; font-size: .85rem; }
+.edit-game-form .versus { margin: 0; }
+.edit-game-form .history-admin-actions { display: flex; margin-left: auto; }
 .compact { padding: 30px; }
 footer { display: flex; justify-content: center; gap: 10px; color: var(--muted); font-size: .7rem; text-transform: uppercase; letter-spacing: .12em; padding: 24px 0 0; }
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 18px); background: var(--cream); color: var(--navy); padding: 12px 18px; border-radius: 9px; font-weight: 700; box-shadow: var(--shadow); opacity: 0; pointer-events: none; transition: .2s; z-index: 5; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 .toast.error { background: #ffd8d3; color: #641c14; }
+.modal-backdrop { position: fixed; inset: 0; background: rgba(6,11,18,.6); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 10; }
+.modal-backdrop[hidden] { display: none; }
+.modal { width: min(360px, 100%); background: var(--panel-2); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); padding: 26px; }
+.modal h3 { font-size: 1.5rem; margin-bottom: 4px; }
+.modal p { color: var(--muted); font-size: .85rem; margin: 0 0 16px; }
+.modal-actions { display: flex; gap: 10px; margin-top: 16px; }
+.modal-actions .primary-button { margin-top: 0; }
+.ghost-button { flex: 1; border: 1px solid var(--line); border-radius: 9px; padding: 14px; background: none; color: var(--cream); font: 800 1rem "Barlow Condensed", sans-serif; text-transform: uppercase; letter-spacing: .08em; cursor: pointer; }
+.ghost-button:hover { border-color: var(--gold); }
+.modal-actions .primary-button { flex: 1; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 @media (max-width: 800px) {
   .page-shell { width: min(100% - 20px, 650px); padding-top: 26px; }
@@ -109,5 +140,9 @@ footer { display: flex; justify-content: center; gap: 10px; color: var(--muted);
   .actions-column { grid-template-columns: 1fr; }
   th, td { padding: 14px 10px; }
   th:nth-child(5), td:nth-child(5) { display: none; }
+  th:nth-child(7), td:nth-child(7) { display: none; }
   .avatar { display: none; }
+  .hero-controls { flex-wrap: wrap; }
+  .edit-game-form select { flex-basis: 100%; }
+  .edit-game-form .history-admin-actions { margin-left: 0; }
 }
