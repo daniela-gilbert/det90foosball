@@ -62,11 +62,13 @@ alter table public.games
   );
 
 -- Raises an error unless p_pin matches the stored admin PIN.
+-- search_path includes "extensions" because Supabase installs pgcrypto
+-- (crypt/gen_salt) there rather than into "public".
 create or replace function public.admin_check_pin(p_pin text)
 returns void
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 begin
   if p_pin is null or not exists (
